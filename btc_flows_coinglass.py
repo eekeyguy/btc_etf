@@ -11,22 +11,40 @@ from io import StringIO
 import csv
 import logging
 from retrying import retry
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Set up logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Dune API key
 DUNE_API_KEY = 'p0RZJpTPCUn9Cn7UTXEWDhalc53QzZXV'
 
+def check_table_exists():
+    url = "https://api.dune.com/api/v1/table/list"
+    headers = {
+        "X-DUNE-API-KEY": DUNE_API_KEY
+    }
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        tables = response.json()
+        return any(table['name'] == 'btc_etf_flow' for table in tables)
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error checking table existence: {str(e)}")
+        return False
+
 def create_dune_table():
+    if check_table_exists():
+        logging.info("Table 'btc_etf_flow' already exists. Skipping creation.")
+        return True
+
     url = "https://api.dune.com/api/v1/table/create"
     payload = {
         "namespace": "eekeyguy_eth",
         "table_name": "btc_etf_flow",
         "description": "BTC ETF Flow Data, sourced from CoinGlass",
         "schema": [
-            {"name": "date", "type": "timestamp"},
+            {"name": "timestamp", "type": "timestamp"},
             {"name": "issuer", "type": "string"},
             {"name": "net_flow", "type": "double"},
             {"name": "aum", "type": "double"},
@@ -61,9 +79,17 @@ def upload_to_dune(csv_data):
         "data": csv_data
     }
     try:
+        # Log the payload for debugging (be careful not to log sensitive data)
+        logging.info(f"Payload preview: {payload['data'][:200]}...")
+        
         response = requests.post(url, json=payload, headers=headers)
+        
+        # Log the response status and content
+        logging.info(f"Response status code: {response.status_code}")
+        logging.info(f"Response content: {response.text}")
+        
         response.raise_for_status()
-        logging.info(f"Data uploaded to Dune successfully: {response.text}")
+        logging.info("Data uploaded to Dune successfully")
         return True
     except requests.exceptions.RequestException as e:
         logging.error(f"Error uploading to Dune: {str(e)}")
@@ -73,7 +99,7 @@ def upload_to_dune(csv_data):
 
 def process_data(headers, rows):
     processed_data = []
-    date = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    timestamp = datetime.now(timezone.utc).isoformat()
     for row in rows:
         for i, value in enumerate(row[1:8]):  # Skip 'Total' column
             if i == 0:  # GBTC
@@ -82,13 +108,13 @@ def process_data(headers, rows):
             net_flow = float(value.replace('+', '').replace('K', '000').replace(',', ''))
             aum = 0  # We don't have AUM data, so defaulting to 0
             market_share = 0  # We don't have market share data, so defaulting to 0
-            processed_data.append([date, issuer, net_flow, aum, market_share])
+            processed_data.append([timestamp, issuer, net_flow, aum, market_share])
     return processed_data
 
 def convert_to_csv(data):
     csv_file = StringIO()
     csv_writer = csv.writer(csv_file)
-    csv_writer.writerow(['date', 'issuer', 'net_flow', 'aum', 'market_share'])
+    csv_writer.writerow(['timestamp', 'issuer', 'net_flow', 'aum', 'market_share'])
     csv_writer.writerows(data)
     csv_data = csv_file.getvalue()
     csv_file.close()
@@ -125,9 +151,9 @@ def main():
     chrome_options.add_argument("--disable-dev-shm-usage")
     
     try:
-        # Create Dune table
+        # Create Dune table (or check if it exists)
         if not create_dune_table():
-            logging.error("Failed to create Dune table. Exiting.")
+            logging.error("Failed to create or verify Dune table. Exiting.")
             return
 
         driver = webdriver.Chrome(options=chrome_options)
@@ -140,8 +166,8 @@ def main():
         processed_data = process_data(headers, data_rows)
         csv_data = convert_to_csv(processed_data)
         
-        # For debugging purposes, print a sample of the CSV data
-        logging.info(f"Sample of CSV data: {csv_data[:200]}...")
+        # Log the full CSV data for debugging
+        logging.info(f"Full CSV data:\n{csv_data}")
         
         if upload_to_dune(csv_data):
             logging.info("Data successfully uploaded to Dune")
