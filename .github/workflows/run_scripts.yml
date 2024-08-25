@@ -31,21 +31,27 @@ jobs:
         # Update and install necessary packages
         sudo apt-get update
         sudo apt-get install -y wget unzip
-    
+
         # Install Google Chrome
         wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
         sudo dpkg -i google-chrome-stable_current_amd64.deb
         sudo apt-get install -f
-    
+
         # Get Chrome version
         CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+')
-    
-        # Download and install the compatible Chromedriver
-        CHROMEDRIVER_VERSION=$(curl -sS "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_VERSION}")
-        wget "https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip"
-        unzip chromedriver_linux64.zip
-        sudo mv chromedriver /usr/local/bin/
 
+        # Get the compatible Chromedriver version
+        CHROMEDRIVER_VERSION=$(curl -sS "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_VERSION}" || echo "No Chromedriver version available for this Chrome version")
+
+        # Download and install the compatible Chromedriver
+        if [[ $CHROMEDRIVER_VERSION != "No Chromedriver version available for this Chrome version" ]]; then
+          wget "https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip"
+          unzip chromedriver_linux64.zip
+          sudo mv chromedriver /usr/local/bin/
+        else
+          echo "Error: Chromedriver version not available for Chrome ${CHROME_VERSION}"
+          exit 1
+        fi
 
     - name: Run Python script
       run: python bitcoin_etf_scraper.py
