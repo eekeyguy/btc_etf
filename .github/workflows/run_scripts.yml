@@ -21,19 +21,32 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install datetime requests==2.26.0 beautifulsoup4==4.10.0 cloudscraper selenium
-        
+    
+    - name: Remove existing Chromedriver
+      run: |
+        sudo rm -f /usr/local/bin/chromedriver
+
     - name: Install Chrome and Chromedriver
       run: |
+        # Update and install necessary packages
         sudo apt-get update
-        sudo apt-get install -y wget
+        sudo apt-get install -y wget unzip
+    
+        # Install Google Chrome
         wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
         sudo dpkg -i google-chrome-stable_current_amd64.deb
         sudo apt-get install -f
-        CHROMEDRIVER_VERSION=$(curl -sS chromedriver.storage.googleapis.com/LATEST_RELEASE)
-        wget https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip
+    
+        # Get Chrome version
+        CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+')
+    
+        # Download and install the compatible Chromedriver
+        CHROMEDRIVER_VERSION=$(curl -sS "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_VERSION}")
+        wget "https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip"
         unzip chromedriver_linux64.zip
         sudo mv chromedriver /usr/local/bin/
-    
+
+
     - name: Run Python script
       run: python bitcoin_etf_scraper.py
 
