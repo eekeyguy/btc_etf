@@ -6,9 +6,11 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import StaleElementReferenceException, TimeoutException
 from io import StringIO
 import csv
 import logging
+from retrying import retry
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -38,6 +40,33 @@ def convert_to_csv(headers, rows):
     csv_file.close()
     return csv_data
 
+@retry(stop_max_attempt_number=3, wait_fixed=2000)
+def click_flows_tab(driver):
+    flows_tab_button = WebDriverWait(driver, 20).until(
+        EC.element_to_be_clickable((By.XPATH, '//button[contains(text(), "Flows (USD)")]'))
+    )
+    flows_tab_button.click()
+    logging.info("Flows (USD) tab clicked")
+
+@retry(stop_max_attempt_number=3, wait_fixed=2000)
+def get_table_data(driver):
+    WebDriverWait(driver, 20).until(
+        EC.presence_of_element_located((By.CLASS_NAME, 'ant-table-tbody'))
+    )
+    logging.info("Table loaded")
+
+    table = driver.find_element(By.CLASS_NAME, 'ant-table-tbody')
+    rows = table.find_elements(By.TAG_NAME, 'tr')
+    headers = [header.text for header in driver.find_element(By.CLASS_NAME, 'ant-table-thead').find_elements(By.TAG_NAME, 'th')]
+
+    data_rows = []
+    for row in rows:
+        cells = row.find_elements(By.TAG_NAME, 'td')
+        data = [cell.text for cell in cells]
+        data_rows.append(data)
+
+    return headers, data_rows
+
 def main():
     chrome_options = Options()
     chrome_options.add_argument("--headless")
@@ -51,28 +80,9 @@ def main():
         driver.get('https://www.coinglass.com/bitcoin-etf')
         logging.info("Page loaded")
 
-        # Wait for the "Flows (USD)" button to be clickable
-        flows_tab_button = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.XPATH, '//button[contains(text(), "Flows (USD)")]'))
-        )
-        flows_tab_button.click()
-        logging.info("Flows (USD) tab clicked")
+        click_flows_tab(driver)
 
-        # Wait for the table to load
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CLASS_NAME, 'ant-table-tbody'))
-        )
-        logging.info("Table loaded")
-
-        table = driver.find_element(By.CLASS_NAME, 'ant-table-tbody')
-        rows = table.find_elements(By.TAG_NAME, 'tr')
-        headers = [header.text for header in driver.find_element(By.CLASS_NAME, 'ant-table-thead').find_elements(By.TAG_NAME, 'th')]
-
-        data_rows = []
-        for row in rows:
-            cells = row.find_elements(By.TAG_NAME, 'td')
-            data = [cell.text for cell in cells]
-            data_rows.append(data)
+        headers, data_rows = get_table_data(driver)
 
         csv_data = convert_to_csv(headers, data_rows)
         upload_to_dune(csv_data)
