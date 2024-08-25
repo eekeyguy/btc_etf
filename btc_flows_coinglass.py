@@ -19,7 +19,7 @@ def upload_to_dune(csv_data):
     dune_upload_url = "https://api.dune.com/api/v1/table/upload/csv"
     payload = json.dumps({
         "data": csv_data,
-        "description": "Bitcoin ETF Flow Data",
+        "description": "BTC ETF Flow Data ",
         "table_name": "btc_etf_flow",
         "is_private": False
     })
@@ -85,6 +85,7 @@ def main():
         headers, data_rows = get_table_data(driver)
 
         csv_data = convert_to_csv(headers, data_rows)
+        print(csv_data)
         upload_to_dune(csv_data)
 
     except Exception as e:
