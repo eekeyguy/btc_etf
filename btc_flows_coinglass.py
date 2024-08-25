@@ -6,12 +6,11 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import StaleElementReferenceException, TimeoutException
+from selenium.common.exceptions import TimeoutException
 from io import StringIO
 import csv
 import logging
 from retrying import retry
-from datetime import datetime, timezone
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -61,25 +60,40 @@ def click_flows_tab(driver):
 
 @retry(stop_max_attempt_number=3, wait_fixed=2000)
 def get_table_data(driver):
-    WebDriverWait(driver, 20).until(
-        EC.presence_of_element_located((By.CLASS_NAME, 'ant-table-tbody'))
-    )
-    logging.info("Table loaded")
-    table = driver.find_element(By.CLASS_NAME, 'ant-table-tbody')
-    rows = table.find_elements(By.TAG_NAME, 'tr')
-    headers = [header.text for header in driver.find_element(By.CLASS_NAME, 'ant-table-thead').find_elements(By.TAG_NAME, 'th')]
-    data_rows = []
-    for row in rows:
-        cells = row.find_elements(By.TAG_NAME, 'td')
-        data = [cell.text for cell in cells]
-        data_rows.append(data)
-    return headers, data_rows
+    try:
+        WebDriverWait(driver, 20).until(
+            EC.presence_of_element_located((By.CLASS_NAME, 'ant-table-tbody'))
+        )
+        logging.info("Table loaded")
+        
+        # Wait for the table to be populated
+        time.sleep(5)
+        
+        table = driver.find_element(By.CLASS_NAME, 'ant-table-tbody')
+        rows = table.find_elements(By.TAG_NAME, 'tr')
+        headers = [header.text for header in driver.find_element(By.CLASS_NAME, 'ant-table-thead').find_elements(By.TAG_NAME, 'th')]
+        data_rows = []
+        for row in rows:
+            cells = row.find_elements(By.TAG_NAME, 'td')
+            data = [cell.text for cell in cells]
+            if any(data):  # Only append non-empty rows
+                data_rows.append(data)
+        
+        if not data_rows:
+            logging.warning("No data found in the table")
+        
+        return headers, data_rows
+    except TimeoutException:
+        logging.error("Timeout while waiting for table to load")
+        return [], []
 
 def main():
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
     
     try:
         driver = webdriver.Chrome(options=chrome_options)
@@ -89,6 +103,10 @@ def main():
         
         click_flows_tab(driver)
         headers, data_rows = get_table_data(driver)
+        
+        if not data_rows:
+            logging.error("No data retrieved, exiting")
+            return
         
         # Convert to CSV
         csv_data = convert_to_csv(headers, data_rows)
