@@ -17,79 +17,24 @@ from datetime import datetime, timezone
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Dune API key
-DUNE_API_KEY = 'p0RZJpTPCUn9Cn7UTXEWDhalc53QzZXV'
+DUNE_API_KEY = '4KdxRCYcHnj2YH24UgtgFPEmybnZCQ0k'
 
-def check_table_exists():
-    url = "https://api.dune.com/api/v1/table/list"
-    headers = {
-        "X-DUNE-API-KEY": DUNE_API_KEY
-    }
-    try:
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        tables = response.json()
-        return any(table['name'] == 'btc_etf_flow' for table in tables)
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Error checking table existence: {str(e)}")
-        return False
-
-def create_dune_table():
-    if check_table_exists():
-        logging.info("Table 'btc_etf_flow' already exists. Skipping creation.")
-        return True
-
-    url = "https://api.dune.com/api/v1/table/create"
-    payload = {
-        "namespace": "eekeyguy_eth",
-        "table_name": "btc_etf_flow",
-        "description": "BTC ETF Flow Data, sourced from CoinGlass",
-        "schema": [
-            {"name": "timestamp", "type": "timestamp"},
-            {"name": "issuer", "type": "string"},
-            {"name": "net_flow", "type": "double"},
-            {"name": "aum", "type": "double"},
-            {"name": "market_share", "type": "double"}
-        ],
-        "is_private": False
-    }
-    headers = {
-        "X-DUNE-API-KEY": DUNE_API_KEY,
-        "Content-Type": "application/json"
-    }
-    try:
-        response = requests.post(url, json=payload, headers=headers)
-        response.raise_for_status()
-        logging.info(f"Dune table created successfully: {response.text}")
-        return True
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Error creating Dune table: {str(e)}")
-        if hasattr(e, 'response') and e.response is not None:
-            logging.error(f"Response content: {e.response.text}")
-        return False
-
-@retry(stop_max_attempt_number=3, wait_fixed=2000)
 def upload_to_dune(csv_data):
-    url = "https://api.dune.com/api/v1/table/upload/csv"
-    headers = {
-        "X-DUNE-API-KEY": DUNE_API_KEY,
-        "Content-Type": "application/json"
-    }
-    payload = {
+    dune_upload_url = "https://api.dune.com/api/v1/table/upload/csv"
+    payload = json.dumps({
+        "data": csv_data,
+        "description": "BTC ETF Flow Data",
         "table_name": "btc_etf_flow",
-        "data": csv_data
+        "is_private": False
+    })
+    headers = {
+        'Content-Type': 'application/json',
+        'X-DUNE-API-KEY': DUNE_API_KEY
     }
     try:
-        # Log the payload for debugging (be careful not to log sensitive data)
-        logging.info(f"Payload preview: {payload['data'][:200]}...")
-        
-        response = requests.post(url, json=payload, headers=headers)
-        
-        # Log the response status and content
-        logging.info(f"Response status code: {response.status_code}")
-        logging.info(f"Response content: {response.text}")
-        
+        response = requests.post(dune_upload_url, headers=headers, data=payload)
         response.raise_for_status()
-        logging.info("Data uploaded to Dune successfully")
+        logging.info(f"Data uploaded to Dune successfully: {response.text}")
         return True
     except requests.exceptions.RequestException as e:
         logging.error(f"Error uploading to Dune: {str(e)}")
@@ -97,29 +42,11 @@ def upload_to_dune(csv_data):
             logging.error(f"Response content: {e.response.text}")
         return False
 
-def process_data(headers, rows):
-    processed_data = []
-    timestamp = datetime.now(timezone.utc).isoformat()
-    for row in rows:
-        for i, value in enumerate(row[1:8]):  # Skip 'Total' column
-            if i == 0:  # GBTC
-                continue  # Skip GBTC as per your request
-            issuer = headers[i+1]
-            try:
-                net_flow = float(value.replace('+', '').replace('K', '000').replace(',', '')) if value.strip() else 0.0
-            except ValueError:
-                logging.warning(f"Could not convert '{value}' to float for issuer {issuer}. Setting to 0.")
-                net_flow = 0.0
-            aum = 0  # We don't have AUM data, so defaulting to 0
-            market_share = 0  # We don't have market share data, so defaulting to 0
-            processed_data.append([timestamp, issuer, net_flow, aum, market_share])
-    return processed_data
-
-def convert_to_csv(data):
+def convert_to_csv(headers, rows):
     csv_file = StringIO()
     csv_writer = csv.writer(csv_file)
-    csv_writer.writerow(['timestamp', 'issuer', 'net_flow', 'aum', 'market_share'])
-    csv_writer.writerows(data)
+    csv_writer.writerow(headers)
+    csv_writer.writerows(rows)
     csv_data = csv_file.getvalue()
     csv_file.close()
     return csv_data
@@ -155,11 +82,6 @@ def main():
     chrome_options.add_argument("--disable-dev-shm-usage")
     
     try:
-        # Create Dune table (or check if it exists)
-        if not create_dune_table():
-            logging.error("Failed to create or verify Dune table. Exiting.")
-            return
-
         driver = webdriver.Chrome(options=chrome_options)
         logging.info("WebDriver initialized successfully")
         driver.get('https://www.coinglass.com/bitcoin-etf')
@@ -167,8 +89,9 @@ def main():
         
         click_flows_tab(driver)
         headers, data_rows = get_table_data(driver)
-        processed_data = process_data(headers, data_rows)
-        csv_data = convert_to_csv(processed_data)
+        
+        # Convert to CSV
+        csv_data = convert_to_csv(headers, data_rows)
         
         # Log the full CSV data for debugging
         logging.info(f"Full CSV data:\n{csv_data}")
