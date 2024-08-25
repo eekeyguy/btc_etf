@@ -20,7 +20,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install datetime requests==2.26.0 beautifulsoup4==4.10.0 cloudscraper selenium
+        pip install datetime requests==2.26.0 beautifulsoup4==4.10.0 cloudscraper selenium retrying
 
     - name: Setup Chrome
       uses: browser-actions/setup-chrome@latest
