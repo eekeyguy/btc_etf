@@ -63,6 +63,7 @@ def get_table_data(driver):
     for row in rows:
         cells = row.find_elements(By.TAG_NAME, 'td')
         data = [cell.text for cell in cells]
+        print(data)
         data_rows.append(data)
 
     return headers, data_rows
