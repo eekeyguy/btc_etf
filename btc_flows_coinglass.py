@@ -11,6 +11,7 @@ from io import StringIO
 import csv
 import logging
 from retrying import retry
+from datetime import datetime
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -21,15 +22,13 @@ DUNE_API_KEY = 'p0RZJpTPCUn9Cn7UTXEWDhalc53QzZXV'
 def create_dune_table():
     url = "https://api.dune.com/api/v1/table/create"
     payload = {
-        "namespace": "eekeyguy_eth",  # Replace with your Dune username
+        "namespace": "eekeyguy_eth",
         "table_name": "btc_etf_flow",
         "description": "BTC ETF Flow Data, sourced from CoinGlass",
         "schema": [
             {"name": "date", "type": "timestamp"},
             {"name": "issuer", "type": "string"},
             {"name": "net_flow", "type": "double"},
-            {"name": "inflow", "type": "double"},
-            {"name": "outflow", "type": "double"},
             {"name": "aum", "type": "double"},
             {"name": "market_share", "type": "double"}
         ],
@@ -50,6 +49,7 @@ def create_dune_table():
             logging.error(f"Response content: {e.response.text}")
         return False
 
+@retry(stop_max_attempt_number=3, wait_fixed=2000)
 def upload_to_dune(csv_data):
     url = "https://api.dune.com/api/v1/table/upload/csv"
     headers = {
@@ -71,12 +71,25 @@ def upload_to_dune(csv_data):
             logging.error(f"Response content: {e.response.text}")
         return False
 
-def convert_to_csv(headers, rows):
+def process_data(headers, rows):
+    processed_data = []
+    date = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    for row in rows:
+        for i, value in enumerate(row[1:8]):  # Skip 'Total' column
+            if i == 0:  # GBTC
+                continue  # Skip GBTC as per your request
+            issuer = headers[i+1]
+            net_flow = float(value.replace('+', '').replace('K', '000').replace(',', ''))
+            aum = 0  # We don't have AUM data, so defaulting to 0
+            market_share = 0  # We don't have market share data, so defaulting to 0
+            processed_data.append([date, issuer, net_flow, aum, market_share])
+    return processed_data
+
+def convert_to_csv(data):
     csv_file = StringIO()
     csv_writer = csv.writer(csv_file)
-    csv_writer.writerow(headers)
-    for row in rows:
-        csv_writer.writerow(row)
+    csv_writer.writerow(['date', 'issuer', 'net_flow', 'aum', 'market_share'])
+    csv_writer.writerows(data)
     csv_data = csv_file.getvalue()
     csv_file.close()
     return csv_data
@@ -124,7 +137,8 @@ def main():
         
         click_flows_tab(driver)
         headers, data_rows = get_table_data(driver)
-        csv_data = convert_to_csv(headers, data_rows)
+        processed_data = process_data(headers, data_rows)
+        csv_data = convert_to_csv(processed_data)
         
         # For debugging purposes, print a sample of the CSV data
         logging.info(f"Sample of CSV data: {csv_data[:200]}...")
