@@ -17,24 +17,23 @@ logging.basicConfig(level=logging.INFO)
 
 def upload_to_dune(csv_data):
     dune_upload_url = "https://api.dune.com/api/v1/table/upload/csv"
-    payload = {
-        "table_name": "btc_etf_flow",
-        "description": "BTC ETF Flow Data",
-        "is_private": False
-    }
-    files = {
-        'data': ('btc_etf_flow.csv', csv_data, 'text/csv')
-    }
     headers = {
         'X-DUNE-API-KEY': 'p0RZJpTPCUn9Cn7UTXEWDhalc53QzZXV'
     }
+    payload = {
+        "table_name": "btc_etf_flow",
+        "description": "BTC ETF Flow Data",
+        "data": csv_data
+    }
     try:
-        response = requests.post(dune_upload_url, headers=headers, data=payload, files=files)
-        response.raise_for_status()  # Raises an HTTPError for bad responses
+        response = requests.post(dune_upload_url, headers=headers, json=payload)
+        response.raise_for_status()
         logging.info(f"Dune API Response: {response.text}")
         return response.json()
     except requests.exceptions.RequestException as e:
         logging.error(f"Error uploading to Dune: {str(e)}")
+        if hasattr(e, 'response') and e.response is not None:
+            logging.error(f"Response content: {e.response.text}")
         return None
 
 def convert_to_csv(headers, rows):
@@ -87,7 +86,8 @@ def main():
         headers, data_rows = get_table_data(driver)
         csv_data = convert_to_csv(headers, data_rows)
         
-        print(csv_data)  # For debugging, you might want to remove this in production
+        # For debugging purposes, print a sample of the CSV data
+        logging.info(f"Sample of CSV data: {csv_data[:200]}...")
         
         result = upload_to_dune(csv_data)
         if result:
