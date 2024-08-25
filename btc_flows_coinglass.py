@@ -21,7 +21,7 @@ DUNE_API_KEY = 'p0RZJpTPCUn9Cn7UTXEWDhalc53QzZXV'
 def create_dune_table():
     url = "https://api.dune.com/api/v1/table/create"
     payload = {
-        "namespace": "my_user",  # Replace with your Dune username
+        "namespace": "eekeyguy_eth",  # Replace with your Dune username
         "table_name": "btc_etf_flow",
         "description": "BTC ETF Flow Data, sourced from CoinGlass",
         "schema": [
