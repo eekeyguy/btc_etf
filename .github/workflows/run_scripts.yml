@@ -22,28 +22,28 @@ jobs:
         python -m pip install --upgrade pip
         pip install datetime requests==2.26.0 beautifulsoup4==4.10.0 cloudscraper selenium
 
-    - name: Remove existing Chromedriver
+    - name: Remove existing Chrome and Chromedriver
       run: |
-        sudo rm -f /usr/local/bin/chromedriver
+        sudo apt-get remove google-chrome-stable
+        sudo rm -rf /usr/local/bin/chromedriver
 
-    - name: Install Google Chrome
+    - name: Install Chrome
       run: |
-        sudo apt-get update
-        sudo apt-get install -y wget
-        wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-        sudo apt install ./google-chrome-stable_current_amd64.deb
+        wget https://storage.googleapis.com/chrome-for-testing-public/128.0.6613.84/linux64/chrome-linux64.zip
+        unzip chrome-linux64.zip
+        sudo mv chrome-linux64 /opt/
+        sudo ln -s /opt/chrome-linux64/chrome /usr/local/bin/chrome
 
     - name: Install Chromedriver
       run: |
-        CHROME_VERSION=$(google-chrome --version | cut -d ' ' -f 3 | cut -d '.' -f 1)
-        CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION")
-        wget -q -O /tmp/chromedriver.zip "https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip"
-        sudo unzip /tmp/chromedriver.zip chromedriver -d /usr/local/bin/
+        wget https://storage.googleapis.com/chrome-for-testing-public/128.0.6613.84/linux64/chromedriver-linux64.zip
+        unzip chromedriver-linux64.zip
+        sudo mv chromedriver-linux64/chromedriver /usr/local/bin/
         sudo chmod +x /usr/local/bin/chromedriver
 
     - name: Verify Chrome and Chromedriver versions
       run: |
-        google-chrome --version
+        chrome --version
         chromedriver --version
 
     - name: Run Bitcoin ETF Scraper
