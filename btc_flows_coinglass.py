@@ -105,7 +105,11 @@ def process_data(headers, rows):
             if i == 0:  # GBTC
                 continue  # Skip GBTC as per your request
             issuer = headers[i+1]
-            net_flow = float(value.replace('+', '').replace('K', '000').replace(',', ''))
+            try:
+                net_flow = float(value.replace('+', '').replace('K', '000').replace(',', '')) if value.strip() else 0.0
+            except ValueError:
+                logging.warning(f"Could not convert '{value}' to float for issuer {issuer}. Setting to 0.")
+                net_flow = 0.0
             aum = 0  # We don't have AUM data, so defaulting to 0
             market_share = 0  # We don't have market share data, so defaulting to 0
             processed_data.append([timestamp, issuer, net_flow, aum, market_share])
