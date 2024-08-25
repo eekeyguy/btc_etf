@@ -15,26 +15,61 @@ from retrying import retry
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 
-def upload_to_dune(csv_data):
-    dune_upload_url = "https://api.dune.com/api/v1/table/upload/csv"
+# Dune API key
+DUNE_API_KEY = 'p0RZJpTPCUn9Cn7UTXEWDhalc53QzZXV'
+
+def create_dune_table():
+    url = "https://api.dune.com/api/v1/table/create"
+    payload = {
+        "namespace": "my_user",  # Replace with your Dune username
+        "table_name": "btc_etf_flow",
+        "description": "BTC ETF Flow Data, sourced from CoinGlass",
+        "schema": [
+            {"name": "date", "type": "timestamp"},
+            {"name": "issuer", "type": "string"},
+            {"name": "net_flow", "type": "double"},
+            {"name": "inflow", "type": "double"},
+            {"name": "outflow", "type": "double"},
+            {"name": "aum", "type": "double"},
+            {"name": "market_share", "type": "double"}
+        ],
+        "is_private": False
+    }
     headers = {
-        'X-DUNE-API-KEY': 'p0RZJpTPCUn9Cn7UTXEWDhalc53QzZXV'
+        "X-DUNE-API-KEY": DUNE_API_KEY,
+        "Content-Type": "application/json"
+    }
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        logging.info(f"Dune table created successfully: {response.text}")
+        return True
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error creating Dune table: {str(e)}")
+        if hasattr(e, 'response') and e.response is not None:
+            logging.error(f"Response content: {e.response.text}")
+        return False
+
+def upload_to_dune(csv_data):
+    url = "https://api.dune.com/api/v1/table/upload/csv"
+    headers = {
+        "X-DUNE-API-KEY": DUNE_API_KEY,
+        "Content-Type": "application/json"
     }
     payload = {
         "table_name": "btc_etf_flow",
-        "description": "BTC ETF Flow Data",
         "data": csv_data
     }
     try:
-        response = requests.post(dune_upload_url, headers=headers, json=payload)
+        response = requests.post(url, json=payload, headers=headers)
         response.raise_for_status()
-        logging.info(f"Dune API Response: {response.text}")
-        return response.json()
+        logging.info(f"Data uploaded to Dune successfully: {response.text}")
+        return True
     except requests.exceptions.RequestException as e:
         logging.error(f"Error uploading to Dune: {str(e)}")
         if hasattr(e, 'response') and e.response is not None:
             logging.error(f"Response content: {e.response.text}")
-        return None
+        return False
 
 def convert_to_csv(headers, rows):
     csv_file = StringIO()
@@ -77,6 +112,11 @@ def main():
     chrome_options.add_argument("--disable-dev-shm-usage")
     
     try:
+        # Create Dune table
+        if not create_dune_table():
+            logging.error("Failed to create Dune table. Exiting.")
+            return
+
         driver = webdriver.Chrome(options=chrome_options)
         logging.info("WebDriver initialized successfully")
         driver.get('https://www.coinglass.com/bitcoin-etf')
@@ -89,8 +129,7 @@ def main():
         # For debugging purposes, print a sample of the CSV data
         logging.info(f"Sample of CSV data: {csv_data[:200]}...")
         
-        result = upload_to_dune(csv_data)
-        if result:
+        if upload_to_dune(csv_data):
             logging.info("Data successfully uploaded to Dune")
         else:
             logging.error("Failed to upload data to Dune")
