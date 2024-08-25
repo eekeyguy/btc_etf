@@ -16,7 +16,7 @@ from retrying import retry
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Dune API key
-DUNE_API_KEY = '4KdxRCYcHnj2YH24UgtgFPEmybnZCQ0k'
+DUNE_API_KEY = 'p0RZJpTPCUn9Cn7UTXEWDhalc53QzZXV'
 
 def upload_to_dune(csv_data):
     dune_upload_url = "https://api.dune.com/api/v1/table/upload/csv"
