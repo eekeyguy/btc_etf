@@ -1,4 +1,4 @@
-name: Run Python Script Daily at 1 AM
+name: Run Python Script Daily at 5 AM
 
 on:
   schedule:
