@@ -12,6 +12,7 @@ def fetch_market_data():
 def extract_required_data(json_data):
     extracted_data = []
     current_date = datetime.now().strftime('%Y-%m-%d')
+    
     for item in json_data:
         extracted_item = {
             'date': current_date,
@@ -21,6 +22,7 @@ def extract_required_data(json_data):
             'title': item['title']
         }
         extracted_data.append(extracted_item)
+    
     return extracted_data
 
 def convert_to_csv(extracted_data):
@@ -60,10 +62,6 @@ def main():
     
     # Upload to Dune
     upload_to_dune(csv_data)
-    
-    # Print the extracted data (optional, for verification)
-    for item in extracted_data:
-        print(json.dumps(item, indent=2))
 
 if __name__ == "__main__":
     main()
